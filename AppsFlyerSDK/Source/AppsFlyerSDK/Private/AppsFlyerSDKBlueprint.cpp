@@ -77,6 +77,26 @@ extern "C" {
     (JNIEnv *env, jobject obj, jobject attributionObject) {}
     JNIEXPORT void JNICALL Java_com_appsflyer_AppsFlyer2dXConversionCallback_onAttributionFailureNative
     (JNIEnv *env, jobject obj, jobject stringError) {}
+
+    JNI_METHOD void Java_com_epicgames_ue4_GameActivity_onAppsFlyerPurchaseValidateSuccessThunkCpp(JNIEnv* env, jobject thiz)
+    {
+        AsyncTask(ENamedThreads::GameThread, []() {
+            for (TObjectIterator<UAppsFlyerSDKCallbacks> Itr; Itr; ++Itr) {
+                Itr->OnPurchaseValidated.Broadcast();
+            }
+        });
+    };
+
+    JNI_METHOD void Java_com_epicgames_ue4_GameActivity_onAppsFlyerPurchaseValidateErrorThunkCpp(JNIEnv* env, jobject thiz, jstring Error)
+    {
+        jboolean isCopy;
+        const char *convertedValue = (env)->GetStringUTFChars(Error, &isCopy);
+        AsyncTask(ENamedThreads::GameThread, [convertedValue]() {
+            for (TObjectIterator<UAppsFlyerSDKCallbacks> Itr; Itr; ++Itr) {
+                Itr->OnPurchaseValidationFailed.Broadcast(convertedValue);
+            }
+        });
+    };
 }
 #elif PLATFORM_IOS
 @protocol AppsFlyerLibDelegate;
@@ -121,6 +141,23 @@ static void onAppOpenAttribution(NSDictionary *attributionData) {
 }
 static void onAppOpenAttributionFailure(NSString *error) {
     NSLog(@"%@", error);
+}
+
+static void onAppsFlyerPurchaseValidateSuccess() {
+    AsyncTask(ENamedThreads::GameThread, []() {
+        for (TObjectIterator<UAppsFlyerSDKCallbacks> Itr; Itr; ++Itr) {
+            Itr->OnPurchaseValidated.Broadcast();
+        }
+    });
+}
+static void onAppsFlyerPurchaseValidateErrorThunkCpp(NSString *error) {
+    FString ErrorString(error);
+    
+    AsyncTask(ENamedThreads::GameThread, [ErrorString]() {
+        for (TObjectIterator<UAppsFlyerSDKCallbacks> Itr; Itr; ++Itr) {
+            Itr->OnPurchaseValidationFailed.Broadcast(ErrorString);
+        }
+    });
 }
 #endif
 UAppsFlyerSDKBlueprint::UAppsFlyerSDKBlueprint(const FObjectInitializer &ObjectInitializer) : Super(ObjectInitializer) {}
@@ -350,6 +387,71 @@ void UAppsFlyerSDKBlueprint::setAdditionalData(TMap <FString, FString> customDat
         }
         [[AppsFlyerLib shared] setAdditionalData:dictionary];
     });
+#else
+    return;
+#endif
+}
+
+void UAppsFlyerSDKBlueprint::logPurchase(int Amount, FString Currency)
+{
+    
+}
+
+void UAppsFlyerSDKBlueprint::logAndValidatePurchase(int Amount, FString Currency, FString Signature, FString OriginalJson, TMap<FString, FString> CustomData)
+{
+    const UAppsFlyerSDKSettings *defaultSettings = GetDefault<UAppsFlyerSDKSettings>();
+    
+#if PLATFORM_ANDROID
+    const FString PublicKey = defaultSettings->appsFlyerPublicKeyAndroid;
+    
+    JNIEnv* env = FAndroidApplication::GetJavaEnv();
+    jmethodID logPurchase = FJavaWrapper::FindMethod(env,
+                                    FJavaWrapper::GameActivityClassID,
+                                    "afLogAndValidatePurchase",
+                                    "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)V", false);
+
+    jstring jAmount = env->NewStringUTF(TCHAR_TO_UTF8(*FString::FromInt(Amount)));
+    jstring jCurrency = env->NewStringUTF(TCHAR_TO_UTF8(*Currency));
+    jstring jSignature = env->NewStringUTF(TCHAR_TO_UTF8(*Signature));
+    jstring jOriginalJson = env->NewStringUTF(TCHAR_TO_UTF8(*OriginalJson));
+    jstring jPublicKey = env->NewStringUTF(TCHAR_TO_UTF8(*PublicKey));
+    
+    jclass mapClass = env->FindClass("java/util/HashMap");
+    jmethodID mapConstructor = env->GetMethodID(mapClass, "<init>", "()V");
+    jobject map = env->NewObject(mapClass, mapConstructor);
+    jmethodID putMethod = env->GetMethodID(mapClass, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+    for (const TPair<FString, FString>& pair : CustomData) {
+        env->CallObjectMethod(map, putMethod, env->NewStringUTF(TCHAR_TO_UTF8(*pair.Key)), env->NewStringUTF(TCHAR_TO_UTF8(*pair.Value)));
+    }
+    
+    FJavaWrapper::CallVoidMethod(env, FJavaWrapper::GameActivityThis, logPurchase, jAmount, jCurrency, jSignature, jOriginalJson, map, jPublicKey);
+
+#elif PLATFORM_IOS
+    const FString PublicKey = defaultSettings->appsFlyerPublicKeyIOS;
+
+    [[AppsFlyerLib shared] validateAndLogInAppPurchase:@"ProductIdentifier"
+        price:@*Amount
+        currency:@*Currency
+        transactionId:@"transactionID"
+        additionalParameters:@{@"test": @"val" , @"test1" : @"val 1"}
+        success:^(NSDictionary *result){
+            NSLog(@"Purchase succeeded And verified! response: %@", result[@"receipt"]);
+            onAppsFlyerPurchaseValidateSuccess();
+        }
+        failure:^(NSError *error, id response) {
+            NSLog(@"response = %@", response);
+            if([response isKindOfClass:[NSDictionary class]]) {
+                if([response[@"status"] isEqualToString:@"in_app_arr_empty"]){
+                  // retry with 'SKReceiptRefreshRequest' because
+                  // Apple has returned an empty response
+                  // <YOUR CODE HERE>
+                }
+            }
+            else {
+                //handle other errors
+                return;
+            }
+    }];
 #else
     return;
 #endif

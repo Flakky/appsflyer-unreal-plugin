@@ -31,11 +31,16 @@
         <insert>
             import android.app.Application;
             import com.appsflyer.*;
+
+            import com.appsflyer.AppsFlyerInAppPurchaseValidatorListener;
         </insert>
     </gameActivityImportAdditions>
     <gameActivityClassAdditions>
         <insert>
             private String afKey;
+
+            private native static void onAppsFlyerPurchaseValidateSuccessThunkCpp();
+            private native static void onAppsFlyerPurchaseValidateErrorThunkCpp(String Error);
 
             public void afStart(String key, boolean isDebug) {
                 afKey = key;
@@ -43,6 +48,20 @@
                 appsflyer.setDebugLog(isDebug);
                 appsflyer.init(key, new AppsFlyer2dXConversionCallback(), this)
                         .start(this);
+
+                AppsFlyerLib.getInstance().registerValidatorListener(this,new
+                    AppsFlyerInAppPurchaseValidatorListener() {
+                        public void onValidateInApp() {
+                            Log.debug("AppsFlyer: Purchase validated successfully");
+
+                            onAppsFlyerPurchaseValidateSuccessThunkCpp();
+                        }
+                        public void onValidateInAppFailure(String error) {
+                            Log.debug("AppsFlyer: onValidateInAppFailure called: " + error);
+
+                            onAppsFlyerPurchaseValidateErrorThunkCpp(error);
+                        }
+                });
             }
 
             public void afSetCustomerUserId(String id) {
@@ -63,6 +82,26 @@
 
             public void afSetAdditionalData(Map&lt;String, Object&gt; customData) {
                 AppsFlyerLib.getInstance().setAdditionalData(customData);
+            }
+
+            public void afLogAndValidatePurchase(String AmountInString, String Currency, String Signature, String OriginalJson, Map&lt;String, String&gt; customData, String PublicKey) {
+
+                Log.debug("AppsFlyer: Purchase log and validate");
+                Log.debug("AppsFlyer: Amount: " + AmountInString);
+                Log.debug("AppsFlyer: Currency: " + Currency);
+                Log.debug("AppsFlyer: Signature: " + Signature);
+                Log.debug("AppsFlyer: Data: " + OriginalJson);
+                Log.debug("AppsFlyer: Public key: " + PublicKey);
+            
+                AppsFlyerLib.getInstance().validateAndLogInAppPurchase(
+                    this,
+                    PublicKey,
+                    Signature,
+                    OriginalJson,
+                    AmountInString,
+                    Currency,
+                    customData
+                );
             }
         </insert>
     </gameActivityClassAdditions>

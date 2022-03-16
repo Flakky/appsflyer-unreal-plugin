@@ -4,6 +4,7 @@
 
 #include "Modules/ModuleManager.h"
 
+class UAppsFlyerSDKCallbacks;
 /**
  * @param CategoryName, category to declare(`LogAppsFlyerSDK`)
  * @param DefaultVerbosity, default run time verbosity(`Display)
@@ -38,4 +39,6 @@ public:
 
     virtual void StartupModule() override;
     virtual void ShutdownModule() override;
+
+	UAppsFlyerSDKCallbacks* AppsFlyerCallbacks;
 };

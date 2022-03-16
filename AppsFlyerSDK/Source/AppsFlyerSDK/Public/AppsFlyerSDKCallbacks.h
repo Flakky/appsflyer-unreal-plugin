@@ -19,13 +19,18 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAppOpenAttribution, const FString
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnConversionDataReceived, const FAppsFlyerConversionData&, installData);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAppOpenAttributionFailure, const FString&, error);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnConversionDataRequestFailure, const FString&, error);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPurchaseValidation);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPurchaseValidationFailure, const FString&, error);
 
-UCLASS(ClassGroup=(AppsFlyerSDK), meta=(BlueprintSpawnableComponent))
-class APPSFLYERSDK_API UAppsFlyerSDKCallbacks : public UActorComponent
+UCLASS(ClassGroup=(AppsFlyerSDK))
+class APPSFLYERSDK_API UAppsFlyerSDKCallbacks : public UObject
 {
     GENERATED_BODY()
     
 public:
+
+	UFUNCTION(BlueprintPure, Category="AppsFlyerSDK")
+	static UAppsFlyerSDKCallbacks* GetAppsFlyerCallbacks();
     
     UAppsFlyerSDKCallbacks(const FObjectInitializer& ObjectInitializer);
     
@@ -54,5 +59,11 @@ public:
     
     UPROPERTY(BlueprintAssignable, BlueprintCallable, Category = "AppsFlyerSDK")
     FOnConversionDataRequestFailure OnConversionDataRequestFailure;
+	
+    UPROPERTY(BlueprintAssignable, BlueprintCallable, Category = "AppsFlyerSDK")
+    FOnPurchaseValidation OnPurchaseValidated;
+    
+    UPROPERTY(BlueprintAssignable, BlueprintCallable, Category = "AppsFlyerSDK")
+    FOnPurchaseValidationFailure OnPurchaseValidationFailed;
     
 };

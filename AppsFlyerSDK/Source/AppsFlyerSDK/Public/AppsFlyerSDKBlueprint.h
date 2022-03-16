@@ -53,4 +53,16 @@ class APPSFLYERSDK_API UAppsFlyerSDKBlueprint : public UBlueprintFunctionLibrary
 	UFUNCTION(BlueprintCallable, Category = AppsFlyerSDK, DisplayName = "AppsFlyerSDK add custom data to events in the payload")
     static void setAdditionalData(TMap <FString, FString> customData);
 
+	/*!
+	 * Track purchase without validation
+	 */
+	UFUNCTION(BlueprintCallable, Category = AppsFlyerSDK, DisplayName = "AppsFlyerSDK log purchase")
+	static void logPurchase(int Amount, FString Currency);
+
+	/*!
+	 * Track purchase with validation
+	 */
+	UFUNCTION(BlueprintCallable, Category = AppsFlyerSDK, DisplayName = "AppsFlyerSDK log & validate purchase")
+	static void logAndValidatePurchase(int Amount, FString Currency, FString Signature, FString OriginalJson, TMap<FString, FString> CustomData);
+
 };

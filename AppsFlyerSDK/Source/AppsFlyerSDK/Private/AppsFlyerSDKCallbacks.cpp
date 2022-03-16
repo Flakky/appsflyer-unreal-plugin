@@ -8,6 +8,13 @@
 
 #include "AppsFlyerSDKCallbacks.h"
 
+#include "AppsFlyerSDK.h"
+
+UAppsFlyerSDKCallbacks* UAppsFlyerSDKCallbacks::GetAppsFlyerCallbacks()
+{
+	return FAppsFlyerSDK::Get().AppsFlyerCallbacks;
+}
+
 UAppsFlyerSDKCallbacks::UAppsFlyerSDKCallbacks(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
 }

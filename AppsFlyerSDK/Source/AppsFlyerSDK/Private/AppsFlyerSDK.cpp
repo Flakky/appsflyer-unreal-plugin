@@ -3,6 +3,7 @@
 #include "AppsFlyerSDK.h"
 #include "AppsFlyerSDKSettings.h"
 #include "AppsFlyerSDKBlueprint.h"
+#include "AppsFlyerSDKCallbacks.h"
 
 #include "ISettingsModule.h"
 
@@ -36,6 +37,9 @@ void FAppsFlyerSDK::StartupModule()
                                  LOCTEXT("RuntimeSettingsDescription", "Configure bundle(plugin)"),
                         GetMutableDefault<UAppsFlyerSDKSettings>());
     }
+
+    AppsFlyerCallbacks = NewObject<UAppsFlyerSDKCallbacks>(GetTransientPackage());
+    AppsFlyerCallbacks->AddToRoot(); // Do not destroy by GC.
 
 #if PLATFORM_ANDROID || PLATFORM_IOS
     UAppsFlyerSDKBlueprint::configure();

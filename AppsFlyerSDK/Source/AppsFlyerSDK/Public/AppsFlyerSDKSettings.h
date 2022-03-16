@@ -41,4 +41,12 @@ public:
      // Enable AppsFlyerSDK automatic start
     UPROPERTY(Config, EditAnywhere, config, Category = "AppsFlyer", meta = (DisplayName = "Automatically start the AppsFlyer SDK"))
     bool bEnableAutoStart;
+
+	// Android (Google Play) public key for purchase validation
+	UPROPERTY(Config, EditAnywhere, Category = "AppsFlyer", meta = (DisplayName = "Anroid (Google Play) Public key"))
+	FString appsFlyerPublicKeyAndroid;
+
+	// IOS (App Store) public key for purchase validation
+	UPROPERTY(Config, EditAnywhere, Category = "AppsFlyer", meta = (DisplayName = "IOS (AppStore) Public key"))
+	FString appsFlyerPublicKeyIOS;
 };
