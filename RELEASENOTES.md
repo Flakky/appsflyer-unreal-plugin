@@ -1,5 +1,14 @@
 # Release Notes
 
+### 6.17.7
+Release date **October 22, 2025**
+Release type: **Minor**
+
+**Overview and Highlights:**
+
+- **Version Update**: Updated iOS framework to v6.17.7
+- **Plugin Update**: Updated plugin to version 6.17.7 to match iOS framework version
+
 ### 6.17.5
 Release date **September 4, 2025**
 Release type: **Minor**
