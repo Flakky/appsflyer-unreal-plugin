@@ -1,17 +1,13 @@
 #include "AppsFlyerSDKBlueprint.h"
-#include "Runtime/Engine/Classes/Kismet/KismetSystemLibrary.h"
-#include "Engine/GameEngine.h"
+
 #include "AppsFlyerSDKSettings.h"
-// #include "EngineMinimal.h"
-#include "Logging/LogMacros.h"
-#include "EngineUtils.h"
-#include "Engine/World.h"
 #include "AppsFlyerConversionData.h"
 #include "AppsFlyerSDKCallbacks.h"
 
 #include "Interfaces/IPluginManager.h"
-// Core
+#include "Logging/LogMacros.h"
 #include "Misc/EngineVersion.h"
+#include "EngineUtils.h"
 #include "UObject/UObjectIterator.h"
 
 
@@ -36,9 +32,51 @@ static inline BOOL AppsFlyerIsEmptyValue(id obj) {
 }
 
 #endif
+
 DEFINE_LOG_CATEGORY(LogAppsFlyerSDKBlueprint);
+DECLARE_CYCLE_STAT(
+    TEXT("FSimpleDelegateGraphTask.ValidateAndLogInAppPurchase"),
+    STAT_FSimpleDelegateGraphTask_ValidateAndLogInAppPurchase,
+    STATGROUP_TaskGraphTasks
+);
+
+namespace
+{
+    static void DispatchValidatePurchaseResponse(const FAppsFlyerPurchaseResponse& Resp)
+    {
+        // Copy for the async UE task (Resp is a const ref)
+        const FAppsFlyerPurchaseResponse RespCopy = Resp;
+
+        FSimpleDelegateGraphTask::CreateAndDispatchWhenReady(
+            FSimpleDelegateGraphTask::FDelegate::CreateLambda([RespCopy]() {
+                for (TObjectIterator<UAppsFlyerSDKCallbacks> Itr; Itr; ++Itr)
+                {
+                    if (IsValid(*Itr))
+                    {
+                        Itr->OnValidateAndLogInAppPurchaseComplete.Broadcast(RespCopy);
+                    }
+                }
+            }),
+            GET_STATID(STAT_FSimpleDelegateGraphTask_ValidateAndLogInAppPurchase),
+            nullptr,
+            ENamedThreads::GameThread);
+    }
+}
 
 #if PLATFORM_ANDROID
+
+DECLARE_CYCLE_STAT(
+    TEXT("FSimpleDelegateGraphTask.InstallConversionDataLoaded"),
+    STAT_FSimpleDelegateGraphTask_InstallConversionDataLoaded,
+    STATGROUP_TaskGraphTasks
+);
+
+DECLARE_CYCLE_STAT(
+    TEXT("FSimpleDelegateGraphTask.InstallConversionFailure"),
+    STAT_FSimpleDelegateGraphTask_InstallConversionFailure,
+    STATGROUP_TaskGraphTasks
+);
+
 extern "C" {
     JNIEXPORT void JNICALL Java_com_appsflyer_AppsFlyer2dXConversionCallback_onInstallConversionDataLoadedNative
     (JNIEnv *env, jobject obj, jobject attributionObject) {
@@ -71,7 +109,7 @@ extern "C" {
         }
         // Java map to UE4 map
         conversionData.InstallData = map;
-        DECLARE_CYCLE_STAT(TEXT("FSimpleDelegateGraphTask.InstallConversionDataLoaded"), STAT_FSimpleDelegateGraphTask_InstallConversionDataLoaded, STATGROUP_TaskGraphTasks);
+        
         FSimpleDelegateGraphTask::CreateAndDispatchWhenReady(FSimpleDelegateGraphTask::FDelegate::CreateLambda([=]() {
             for (TObjectIterator<UAppsFlyerSDKCallbacks> Itr; Itr; ++Itr) {
                 if (IsValid(*Itr))
@@ -88,7 +126,6 @@ extern "C" {
         const char *convertedValue = (env)->GetStringUTFChars(stringError, &isCopy);
         FString Value(UTF8_TO_TCHAR(convertedValue));
 
-        DECLARE_CYCLE_STAT(TEXT("FSimpleDelegateGraphTask.InstallConversionFailure"), STAT_FSimpleDelegateGraphTask_InstallConversionFailure, STATGROUP_TaskGraphTasks);
         FSimpleDelegateGraphTask::CreateAndDispatchWhenReady(FSimpleDelegateGraphTask::FDelegate::CreateLambda([=]() {
             for (TObjectIterator<UAppsFlyerSDKCallbacks> Itr; Itr; ++Itr) {
                 if (IsValid(*Itr))
@@ -349,7 +386,6 @@ void UAppsFlyerSDKBlueprint::logEvent(FString eventName, TMap <FString, FString>
         [[AppsFlyerLib shared] logEvent:eventName.GetNSString() withValues:dictionary];
     });
 #endif
-    GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Blue, TEXT("logEvent raised"));
 }
 
 FString UAppsFlyerSDKBlueprint::getAppsFlyerUID() {
@@ -611,4 +647,147 @@ void UAppsFlyerSDKBlueprint::SetConsentDataTOptional(
 		Convert(HasConsentForAdsPersonalization),
 		Convert(HasConsentForAdStorage)
 	);
+}
+
+void UAppsFlyerSDKBlueprint::ValidateAndLogInAppPurchase(
+    const FAFSDKPurchaseDetails& PurchaseDetails,
+    const TMap<FString, FString>& PurchaseAdditionalDetails)
+{
+    // Validate required fields
+    if (PurchaseDetails.ProductId.IsEmpty() || PurchaseDetails.TransactionId.IsEmpty())
+    {
+        FAppsFlyerPurchaseResponse Err;
+        Err.Status = EAFValidateAndLogStatus::Error;
+        Err.Error  = TEXT("productId and transactionId must be non-empty");
+        DispatchValidatePurchaseResponse(Err);
+        return;
+    }
+#if !PLATFORM_IOS
+    {
+        FAppsFlyerPurchaseResponse Err;
+        Err.Status = EAFValidateAndLogStatus::Error;
+        Err.Error  = TEXT("Platform not supported");
+        DispatchValidatePurchaseResponse(Err);
+        return;
+    }
+#else
+    // IMPORTANT: we dispatch async, so we must NOT capture references to stack args.
+    // Copy the data we need up-front.
+    const FString ProductIdStr     = PurchaseDetails.ProductId;
+    const FString TransactionIdStr = PurchaseDetails.TransactionId;
+    const EAFPurchaseType PurchaseTypeEnum = PurchaseDetails.PurchaseType;
+    const TMap<FString, FString> AdditionalDetailsCopy = PurchaseAdditionalDetails;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+      @autoreleasepool {
+        
+        NSString *ProductId = ProductIdStr.GetNSString();
+        NSString *TransactionId = TransactionIdStr.GetNSString();
+
+        if (!ProductId || !TransactionId)
+        {
+            FAppsFlyerPurchaseResponse Err;
+            Err.Status = EAFValidateAndLogStatus::Error;
+            Err.Error  = TEXT("Failed to convert ProductId or TransactionId to NSString");
+            DispatchValidatePurchaseResponse(Err);
+            return;
+        }
+
+        AFSDKPurchaseType PurchaseType = (PurchaseTypeEnum == EAFPurchaseType::Subscription)
+                                             ? AFSDKPurchaseTypeSubscription
+                                             : AFSDKPurchaseTypeOneTimePurchase;
+
+        AFSDKPurchaseDetails *PurchaseObj = [[AFSDKPurchaseDetails alloc] initWithProductId:ProductId
+                                                                              transactionId:TransactionId
+                                                                               purchaseType:PurchaseType];
+        if (!PurchaseObj)
+        {
+            FAppsFlyerPurchaseResponse Err;
+            Err.Status = EAFValidateAndLogStatus::Error;
+            Err.Error  = TEXT("Failed to allocate AFSDKPurchaseDetails");
+            DispatchValidatePurchaseResponse(Err);
+            return;
+        }
+
+        // Build additional details on the same queue; guard against nil keys/values.
+        NSMutableDictionary *AdditionalDetails = nil;
+        const int32 NumExtra = AdditionalDetailsCopy.Num();
+        if (NumExtra > 0)
+        {
+            AdditionalDetails = [[NSMutableDictionary alloc] initWithCapacity:NumExtra];
+            for (const TPair<FString, FString> &Pair : AdditionalDetailsCopy)
+            {
+                NSString *Key = Pair.Key.GetNSString();
+                NSString *Value = Pair.Value.GetNSString();
+                if (Key && Value)
+                {
+                    [AdditionalDetails setObject:Value forKey:Key];
+                }
+            }
+
+            // If nothing valid was added, pass nil.
+            if (AdditionalDetails.count == 0)
+            {
+                [AdditionalDetails release];
+                AdditionalDetails = nil;
+            }
+        }
+
+        [[AppsFlyerLib shared]
+            validateAndLogInAppPurchase:PurchaseObj
+              purchaseAdditionalDetails:AdditionalDetails
+                             completion:^(NSDictionary *Response, NSError *Error) {
+                               @autoreleasepool {
+                                 FAppsFlyerPurchaseResponse Out;
+
+                                 if (Error)
+                                 {
+                                     Out.Status = EAFValidateAndLogStatus::Error;
+                                     NSString *Desc = Error.localizedDescription;
+                                     Out.Error = Desc ? FString(Desc.UTF8String) : TEXT("Unknown error");
+                                 }
+                                 else if (Response)
+                                 {
+                                     Out.Status = EAFValidateAndLogStatus::Success;
+
+                                     NSString *JsonString = @"";
+                                     NSError *JsonError = nil;
+
+                                     if ([NSJSONSerialization isValidJSONObject:Response])
+                                     {
+                                         NSData *JsonData = [NSJSONSerialization dataWithJSONObject:Response options:0 error:&JsonError];
+                                         if (JsonData && !JsonError)
+                                         {
+                                             JsonString = [[[NSString alloc] initWithData:JsonData
+                                                                                 encoding:NSUTF8StringEncoding] autorelease];
+                                         }
+                                     }
+
+                                     // Fallback to Obj-C description if JSON serialization failed
+                                     if (!JsonString || JsonString.length == 0)
+                                     {
+                                         JsonString = [NSString stringWithFormat:@"%@", Response];
+                                     }
+
+                                     Out.ResultJson = FString(JsonString.UTF8String);
+                                 }
+                                 else
+                                 {
+                                     Out.Status = EAFValidateAndLogStatus::Error;
+                                     Out.Error = TEXT("Response and error are both nil");
+                                 }
+
+                                 [PurchaseObj release];
+                                 if (AdditionalDetails)
+                                 {
+                                     [AdditionalDetails release];
+                                 }
+
+                                 UE_LOG(LogAppsFlyerSDKBlueprint, Display, TEXT("Dispatch Response"));
+                                DispatchValidatePurchaseResponse(Out);
+                               }
+                             }];
+      }
+    });
+#endif
 }

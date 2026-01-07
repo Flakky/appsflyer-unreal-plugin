@@ -16,6 +16,52 @@ enum class EAFBooleanState : uint8
     ValueFalse UMETA(DisplayName = "ValueFalse")
 };
 
+UENUM(BlueprintType)
+enum class EAFPurchaseType : uint8
+{
+    Subscription    UMETA(DisplayName = "Subscription"),
+    OneTimePurchase UMETA(DisplayName = "One Time Purchase")
+};
+
+UENUM(BlueprintType)
+enum class EAFValidateAndLogStatus : uint8
+{
+    Success UMETA(DisplayName = "Success"),
+    Error   UMETA(DisplayName = "Error")
+};
+
+USTRUCT(BlueprintType)
+struct FAFSDKPurchaseDetails
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "AppsFlyerSDK")
+    FString ProductId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "AppsFlyerSDK")
+    FString TransactionId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "AppsFlyerSDK")
+    EAFPurchaseType PurchaseType;
+};
+
+USTRUCT(BlueprintType)
+struct FAppsFlyerPurchaseResponse
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "AppsFlyerSDK")
+    EAFValidateAndLogStatus Status;
+
+    // Raw AppsFlyer response serialized as JSON
+    UPROPERTY(BlueprintReadWrite, Category = "AppsFlyerSDK")
+    FString ResultJson;
+
+    UPROPERTY(BlueprintReadWrite, Category = "AppsFlyerSDK")
+    FString Error;
+};
+
+
 UCLASS()
 class APPSFLYERSDK_API UAppsFlyerSDKBlueprint : public UBlueprintFunctionLibrary {
 	GENERATED_UCLASS_BODY()
@@ -89,6 +135,19 @@ class APPSFLYERSDK_API UAppsFlyerSDKBlueprint : public UBlueprintFunctionLibrary
 		TOptional<bool> HasConsentForDataUsage,
 		TOptional<bool> HasConsentForAdsPersonalization,
 		TOptional<bool> HasConsentForAdStorage
+	);
+
+	/*!
+	 * Validates and logs an in-app purchase using the updated VAL V2 flow.
+	 * This method should be called after a successful transaction.
+	 * Results are broadcast via UAppsFlyerSDKCallbacks::OnValidateAndLogInAppPurchaseComplete multicast delegate.
+	 * @param PurchaseDetails - Must include productId (non-empty), transactionId (non-empty), and purchaseType
+	 * @param PurchaseAdditionalDetails - Optional metadata associated with the purchase
+	 */
+	UFUNCTION(BlueprintCallable, Category = "AppsFlyerSDK", DisplayName = "Validate And Log In App Purchase")
+	static void ValidateAndLogInAppPurchase(
+		const FAFSDKPurchaseDetails& PurchaseDetails,
+		const TMap<FString, FString>& PurchaseAdditionalDetails
 	);
 	
 };
