@@ -12,6 +12,7 @@ slug: ue-api
 - [Start](#start)
 - [Log Event](#log-event)
 - [Get AppsFlyerUID](#get-appsflyeruid)
+- [Get Advertising Identifier](#get-advertising-identifier)
 - [WaitForATTUserAutorization (iOS only)](#waitForATTUserAuthorizationWithTimeoutInterval)
 - [Set Customer User Id](#set-customer-user-id)
 - [Set Consent Data](#set-consent-data)
@@ -19,6 +20,7 @@ slug: ue-api
     - [iOS Uninstall](#ios-uninstall)
     - [Android Uninstall](#android-uninstall)
 - [Set Additional Data](#set-additional-data)
+- [Validate And Log In App Purchase](#validate-and-log-in-app-purchase)
 
 
 ## Configure
@@ -87,6 +89,20 @@ Retrieve the AppsFlyer ID (unique installation Id) from the SDK.
 ```c++
 static FString getAppsFlyerUID();
 ```
+
+## Get Advertising Identifier
+
+Retrieve the advertising identifier (IDFA on iOS) from the SDK. 
+
+**Note**: This API is iOS-only. On Android, it returns an empty string.
+
+### C++
+
+```c++
+static FString advertisingIdentifier();
+```
+
+- Returns the advertising identifier string (IDFA on iOS, empty string on Android).
 
 
 ## waitForATTUserAuthorizationWithTimeoutInterval
@@ -258,3 +274,55 @@ Add custom key-value pairs to the payload of the install event and any in-app ev
 ```c++
 static void setAdditionalData(TMap<FString,FString> customData);
 ```
+
+## Validate And Log In App Purchase
+
+Validates and logs an in-app purchase using the updated VAL V2 flow. This method should be called after a successful transaction. Results are broadcast via the `OnValidateAndLogInAppPurchaseComplete` callback delegate.
+
+**IMPORTANT**: 
+- This API is iOS-only. On other platforms, it will return an error.
+- The `productId` and `transactionId` must be non-empty strings.
+
+### Parameters
+
+- **PurchaseDetails** - A struct containing:
+  - `ProductId` (FString) - The product identifier (required, non-empty)
+  - `TransactionId` (FString) - The transaction identifier (required, non-empty)
+  - `PurchaseType` (EAFPurchaseType) - Either `Subscription` or `OneTimePurchase`
+- **PurchaseAdditionalDetails** - Optional map of key-value pairs containing additional metadata associated with the purchase
+
+### Response
+
+The result is delivered via the `OnValidateAndLogInAppPurchaseComplete` callback delegate, which provides a `FAppsFlyerPurchaseResponse` struct containing:
+- `Status` (EAFValidateAndLogStatus) - Either `Success` or `Error`
+- `ResultJson` (FString) - Raw AppsFlyer response serialized as JSON (on success)
+- `Error` (FString) - Error message (on failure)
+
+### C++
+
+```c++
+static void ValidateAndLogInAppPurchase(
+    const FAFSDKPurchaseDetails& PurchaseDetails,
+    const TMap<FString, FString>& PurchaseAdditionalDetails
+);
+```
+
+### Example Usage
+
+To receive the validation result, add the `AppsFlyerSDKCallbacks` component to an actor and bind to the `OnValidateAndLogInAppPurchaseComplete` delegate:
+
+```c++
+// In your Blueprint or C++ code
+FAFSDKPurchaseDetails PurchaseDetails;
+PurchaseDetails.ProductId = TEXT("com.example.product");
+PurchaseDetails.TransactionId = TEXT("transaction_123");
+PurchaseDetails.PurchaseType = EAFPurchaseType::OneTimePurchase;
+
+TMap<FString, FString> AdditionalDetails;
+AdditionalDetails.Add(TEXT("currency"), TEXT("USD"));
+AdditionalDetails.Add(TEXT("price"), TEXT("9.99"));
+
+UAppsFlyerSDKBlueprint::ValidateAndLogInAppPurchase(PurchaseDetails, AdditionalDetails);
+```
+
+For more information about in-app purchase validation, see the [AppsFlyer documentation](https://dev.appsflyer.com/hc/docs/validate-in-app-purchases).

@@ -4,7 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "MainMenuWidget.h"
 #include "AppsFlyerHUDActor.generated.h"
+
 
 UCLASS()
 class DEMO_API AAppsFlyerHUDActor : public AActor
@@ -27,10 +29,10 @@ public:
 public:
     // Expose the widget to editor so you can assign it
     UPROPERTY(EditAnywhere, Category = "UI")
-    TSubclassOf<class UUserWidget> WidgetClass;
+    TSubclassOf<UMainMenuWidget> MainMenuWidgetClass;
 
 private:
     UPROPERTY()
-    UUserWidget* WidgetInstance;
+    UMainMenuWidget* MainMenuWidget;
 
 };

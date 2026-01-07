@@ -3,7 +3,7 @@
 
 #include "AppsFlyerHUDActor.h"
 #include "Blueprint/UserWidget.h"
-// #include "AppsFlyerSDKBlueprint.h"
+#include "GameFramework/PlayerController.h"
 
 // Sets default values
 AAppsFlyerHUDActor::AAppsFlyerHUDActor()
@@ -16,6 +16,7 @@ AAppsFlyerHUDActor::AAppsFlyerHUDActor()
 void AAppsFlyerHUDActor::BeginPlay()
 {
     Super::BeginPlay();
+    UE_LOG(LogTemp, Log, TEXT("[AppsFlyerHUDActor] BeginPlay"));
 
     /*
     UAppsFlyerSDKBlueprint::SetConsentData(
@@ -32,13 +33,15 @@ void AAppsFlyerHUDActor::BeginPlay()
         TOptional<bool>(true)    // HasConsentForAdStorage
     );*/
 
-    if (WidgetClass)
+    if (MainMenuWidgetClass)
     {
-        WidgetInstance = CreateWidget<UUserWidget>(GetWorld(), WidgetClass);
-        if (WidgetInstance)
+        MainMenuWidget = CreateWidget<UMainMenuWidget>(GetWorld(), MainMenuWidgetClass);
+        if (MainMenuWidget)
         {
-            WidgetInstance->AddToViewport();
+            MainMenuWidget->AddToViewport();
         }
+    } else {
+        UE_LOG(LogTemp, Log, TEXT("[AppsFlyerHUDActor] No MainMenuWidgetClass found"));
     }
 }
 

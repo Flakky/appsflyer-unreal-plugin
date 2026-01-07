@@ -1,5 +1,18 @@
 # Release Notes
 
+### 6.17.8
+Release date **January 7, 2026**
+Release type: **Minor**
+
+**Overview and Highlights:**
+
+- **Version Update**: Updated iOS framework to v6.17.8, Android framework to v6.17.5
+- **Plugin Update**: Updated plugin to version 6.17.8 to match iOS framework version
+- **New API**: Added `ValidateAndLogInAppPurchase` method for validating and logging in-app purchases using the VAL V2 flow (iOS only)
+
+**New APIs:**
+- `ValidateAndLogInAppPurchase()` - Validates and logs in-app purchases using the updated VAL V2 flow (iOS only)
+
 ### 6.17.7
 Release date **October 22, 2025**
 Release type: **Minor**
